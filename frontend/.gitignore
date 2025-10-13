@@ -1,0 +1,6 @@
+# Ignore environment files
+.env
+
+# Other common Python ignores
+__pycache__/
+*.pyc
