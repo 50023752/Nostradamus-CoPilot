@@ -1,9 +1,0 @@
-/* This CSS targets the logo image in the header */
-img.logo {
-  /* It forcefully replaces the broken image source with your correct URL */
-  content: url("https://www.ltfinance.com/images/default-source/company-logo/l-t-finance-logo.png?sfvrsn=e2123fc4_1");
-  
-  /* You can also adjust the size if needed */
-  width: 150px;
-  height: auto;
-}
