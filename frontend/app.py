@@ -4,6 +4,7 @@ import json
 import re
 from toolbox_core import ToolboxClient
 import pandas as pd
+import io
 
 # --- Configuration ---
 TOOLBOX_URL = os.getenv("TOOLBOX_URL", "http://127.0.0.1:5000")
@@ -253,6 +254,15 @@ async def main(message: cl.Message):
         if follow_ups:
             actions.append(cl.Action(name="view_follow_ups", value="follow_ups", label="❓ Follow-ups", payload={"follow_ups": follow_ups.strip()}))
 
+        # --- Add CSV download button ---
+        actions.append(
+            cl.Action(
+                name="download_csv",
+                value="download_csv",
+                label="Download CSV",
+                payload={"answer_text": answer_string}  # pass the extracted answer
+            )
+        )
 
         # 5. Attach the elements and update the final message
         thinking_message.elements = elements
@@ -295,3 +305,68 @@ async def on_follow_ups_action(action: cl.Action):
         ).send()
     else:
         await cl.Message(content="Could not retrieve the follow-up questions.").send()
+
+# --- NEW: Action callback for CSV download ---
+@cl.action_callback("download_csv")
+async def on_download_csv(action: cl.Action):
+    import io
+    import pandas as pd
+
+    answer_text = action.payload.get("answer_text", "")
+    if not answer_text.strip():
+        print("No answer_text found in payload.")
+        await cl.Message("No data available to download.").send()
+        return
+
+    try:
+
+        # Split lines and remove empty lines
+        lines = [line.strip() for line in answer_text.splitlines() if line.strip()]
+
+        # Find the first line that looks like a table header (starts with '|')
+        table_start_idx = None
+        for i, line in enumerate(lines):
+            if line.startswith("|"):
+                table_start_idx = i
+                break
+
+        if table_start_idx is None or len(lines) <= table_start_idx + 1:
+            print("Could not detect a Markdown table in the response.")
+            await cl.Message("Could not detect a Markdown table in the response.").send()
+            return
+
+        # Header row
+        headers = [h.strip() for h in lines[table_start_idx].strip("|").split("|")]
+
+        # Data rows (skip header + separator line)
+        data_rows = []
+        for row in lines[table_start_idx + 2:]:
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            if len(cells) != len(headers):
+                print(f"Skipping row (column mismatch): {cells}")
+                continue
+            data_rows.append(cells)
+
+        df = pd.DataFrame(data_rows, columns=headers)
+
+        # Optional: convert numeric columns automatically
+        for col in df.columns[1:]:
+            df[col] = pd.to_numeric(df[col], errors='ignore')
+
+        # CSV in-memory
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+
+        file_name = "copilot_result.csv"
+        file_element = cl.File(name=file_name, content=csv_buffer.getvalue())
+        await cl.Message(
+            content="**Download CSV:** Click below to download the extracted answer -",
+            elements=[file_element]
+        ).send()
+
+        print(f"CSV generated successfully: {file_name}")
+
+    except Exception as e:
+        print(f"Failed to generate CSV: {str(e)}")
+        await cl.Message(f"Failed to generate CSV: {str(e)}").send()
