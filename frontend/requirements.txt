@@ -3,3 +3,4 @@
 chainlit==2.8.0
 toolbox-core
 protobuf>=6.30.0
+pandas
