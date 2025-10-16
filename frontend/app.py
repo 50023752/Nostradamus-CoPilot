@@ -204,7 +204,7 @@ async def main(message: cl.Message):
         tables_to_use = [{
             "projectId": "analytics-datapipeline-prod",
             "datasetId": "aiml_cj_nostd_mart", # Corrected dataset name from previous logs
-            "tableId": "TW_NOSTD_MART_realtime"
+            "tableId": "TW_NOSTD_MART_REALTIME_UPDATED"
         }]
 
         temperature = 0.1  # set to your desired value
