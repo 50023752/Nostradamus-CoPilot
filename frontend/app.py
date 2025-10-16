@@ -1,14 +1,24 @@
-import chainlit as cl
 import os
 import json
 import re
-from toolbox_core import ToolboxClient
-import pandas as pd
 import io
+import uuid
+import pandas_gbq
+import pandas as pd
+import chainlit as cl
+from datetime import datetime
+from google.oauth2 import service_account
+from toolbox_core import ToolboxClient
 
 # --- Configuration ---
 TOOLBOX_URL = os.getenv("TOOLBOX_URL", "http://127.0.0.1:5000")
 TOOLSET_NAME = "my-toolset"
+
+# For saving the user questions and answers
+PROJECT_ID = 'analytics-datapipeline-prod'
+DATASET_ID = 'aiml_cj'
+TABLE_ID = 'aiml_cj_nost_copilot_dump'
+
 
 # print(os.getenv("CHAINLIT_AUTH_SECRET"))
 
@@ -63,6 +73,43 @@ def parse_tool_response(response_text: str):
             result["Answer"] = item["Answer"]
 
     return result
+
+# -------- Helper Function: Write to bigQuery Table --------
+def to_bq(df, project_id, dataset_id, table_id, if_exists='append'):
+    table_full_id = f"{project_id}.{dataset_id}.{table_id}"
+    pandas_gbq.to_gbq(df, destination_table=table_full_id, project_id=project_id, if_exists=if_exists)
+    print(f"Data written to {table_full_id} successfully with shape {df.shape}.")
+
+
+# -------- Helper Function: Write to bigQuery Table --------
+def log_to_bq(user_query, answer, status="success", user_feedback=None, error_message=None):
+    try:
+        user = cl.user_session.get("user")
+        user_id = user.identifier if user else "anonymous"
+        
+        # Create a dataframe with one row
+        df = pd.DataFrame([{
+            "user" : user_id,
+            "time": datetime.utcnow(),
+            "user_query": user_query,
+            # "sql_generated": sql_query,
+            "model_answer": answer,
+            "status": status,
+            "error_message": error_message,
+            "user_feedback" : user_feedback,
+            # "response_time_ms": time_taken,
+            # "source_table": "aiml_cj_nostd_mart.TW_NOSTD_MART_realtime"
+        }])
+
+        # Send to BigQuery
+        to_bq(
+            df,
+            project_id=PROJECT_ID,
+            dataset_id=DATASET_ID,
+            table_id=TABLE_ID
+        )
+    except Exception as e:
+        print(f"Failed to log to BigQuery: {str(e)}")
 
 
 # --- SYSTEM INSTRUCTION (Persistent Analyst Rules) ---
@@ -254,15 +301,37 @@ async def main(message: cl.Message):
         if follow_ups:
             actions.append(cl.Action(name="view_follow_ups", value="follow_ups", label="❓ Follow-ups", payload={"follow_ups": follow_ups.strip()}))
 
+        log_to_bq(user_query, main_content)
+
         # --- Add CSV download button ---
         actions.append(
             cl.Action(
                 name="download_csv",
                 value="download_csv",
                 label="Download CSV",
-                payload={"answer_text": answer_string}  # pass the extracted answer
+                payload={"answer_text": answer_string}
             )
         )
+        # --- Add thumbs up ---
+        actions.append(
+            cl.Action(
+                name="feedback_up",
+                value="thumbs_up",
+                label="👍",
+                payload={"user_query": user_query, "answer": answer_string}
+            )
+        )
+        # --- Add thumbs down ---
+        actions.append(
+            cl.Action(
+                name="feedback_down",
+                value="thumbs_down",
+                label="👎",
+                payload={"user_query": user_query, "answer": answer_string}
+            )
+        )
+
+
 
         # 5. Attach the elements and update the final message
         thinking_message.elements = elements
@@ -270,6 +339,7 @@ async def main(message: cl.Message):
         await thinking_message.update()
 
     except Exception as e:
+        log_to_bq(user_query, None, None, status="error", error_message=str(e))
         await cl.Message(
             author="Error",
             content=f"An unexpected error occurred: {str(e)}"
@@ -370,3 +440,36 @@ async def on_download_csv(action: cl.Action):
     except Exception as e:
         print(f"Failed to generate CSV: {str(e)}")
         await cl.Message(f"Failed to generate CSV: {str(e)}").send()
+
+
+@cl.action_callback("feedback_up")
+async def handle_feedback_up(action: cl.Action):
+    user = cl.user_session.get("user")
+    user_id = user.identifier if user else "anonymous"
+    user_query = action.payload.get("user_query")
+    answer = action.payload.get("answer")
+
+    # Log the feedback
+    print(f"[FEEDBACK] 👍 by {user_id} for query: {user_query}")
+
+    # write to BigQuery
+    log_to_bq(user_query, answer, status="success", user_feedback='positive')
+
+    await cl.Message(author="Data Assistant", content="Feedback submitted!").send()
+
+
+@cl.action_callback("feedback_down")
+async def handle_feedback_down(action: cl.Action):
+    user = cl.user_session.get("user")
+    user_id = user.identifier if user else "anonymous"
+    user_query = action.payload.get("user_query")
+    answer = action.payload.get("answer")
+
+    # Log the feedback
+    print(f"[FEEDBACK] 👎 by {user_id} for query: {user_query}")
+
+    # write to BigQuery
+    log_to_bq(user_query, answer, status="success", user_feedback='negative')
+
+    await cl.Message(author="Data Assistant", content="Feedback submitted!").send()
+
