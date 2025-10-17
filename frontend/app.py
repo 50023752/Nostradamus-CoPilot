@@ -175,7 +175,6 @@ async def start_chat():
         - What is the GNS for 1st month region wise percentage and count?
         - Which region has the highest slippage of customers from 0 dpd last year to 30+ dpd ?
         - Could you tell me the split of high, medium and risky customers count and percentage according to the early warning score model?
-
         💡 *Use the View SQL Mode toggle in settings to show/hide SQL queries!*
         """
     ).send()
