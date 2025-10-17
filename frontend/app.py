@@ -165,17 +165,15 @@ async def start_chat():
     cl.user_session.set("history", [])
     
     await cl.Message(
-        author="Data Assistant",
-        content=""" ***Welcome to Nostradamus Assistant*** 
+        author="Orion",
+        content=""" ***Welcome to Orion - The Nostradamus Copilot*** 
         I'm ready to answer your questions about the Two Wheeler Data.
         Type your question below to get started!
         Example questions:
         - What is the growth rate in TW disbursement of Pan India in the last 6 months?
-        - What is the count and percentage of cases that have completed 12 MOB and are 90 plus DPD ever?
         - What is the GNS for 1st month region wise percentage and count?
         - Which region has the highest slippage of customers from 0 dpd last year to 30+ dpd ?
         - Could you tell me the split of high, medium and risky customers count and percentage according to the early warning score model?
-        💡 *Use the View SQL Mode toggle in settings to show/hide SQL queries!*
         """
     ).send()
 
@@ -184,7 +182,7 @@ async def main(message: cl.Message):
     client = cl.user_session.get("client")
     
     user_query = message.content
-    thinking_message = cl.Message(author="Data Assistant", content="Processing your query...")
+    thinking_message = cl.Message(author="Orion", content="Processing your query...")
     await thinking_message.send()
 
     # --- NEW: Retrieve history and build the context string ---
@@ -226,7 +224,7 @@ async def main(message: cl.Message):
         )
 
         if not response_string:
-            await cl.Message(author="Data Assistant", content="I'm sorry, I couldn't generate a response for that question.").send()
+            await cl.Message(author="Orion", content="I'm sorry, I couldn't generate a response for that question.").send()
             return
 
         # --- DEBUGGING PRINTS ---
@@ -463,7 +461,7 @@ async def handle_feedback_up(action: cl.Action):
     # write to BigQuery
     log_to_bq(user_query, answer, status="success", user_feedback='positive')
 
-    await cl.Message(author="Data Assistant", content="Feedback submitted!").send()
+    await cl.Message(author="Orion", content="Feedback submitted!").send()
 
 
 @cl.action_callback("feedback_down")
@@ -479,5 +477,5 @@ async def handle_feedback_down(action: cl.Action):
     # write to BigQuery
     log_to_bq(user_query, answer, status="success", user_feedback='negative')
 
-    await cl.Message(author="Data Assistant", content="Feedback submitted!").send()
+    await cl.Message(author="Orion", content="Feedback submitted!").send()
 
