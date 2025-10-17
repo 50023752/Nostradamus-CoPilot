@@ -171,7 +171,7 @@ async def start_chat():
         Type your question below to get started!
         Example questions:
         - What is the growth rate in TW disbursement of Pan India in the last 6 months?
-        - What is the count and percentage of cases that have completed 12 MOB and are 90 plus ever?
+        - What is the count and percentage of cases that have completed 12 MOB and are 90 plus DPD ever?
         - What is the GNS for 1st month region wise percentage and count?
         - Which region has the highest slippage of customers from 0 dpd last year to 30+ dpd ?
         - Could you tell me the split of high, medium and risky customers count and percentage according to the early warning score model?
