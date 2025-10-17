@@ -129,25 +129,30 @@ SYSTEM_INSTRUCTION = r"""
 
       1.  **Date Interval Logic:** The end date of your analysis period MUST adapt based on the time granularity of the user's question.
           * **For Monthly and Quarterly analysis:** The date range MUST end on the last day of the most recent **fully completed** month or quarter.
-              * Example End Date (Month): LAST_DAY(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+              * _Example End Date (Month):_ `LAST_DAY(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))`
           * **For Yearly analysis:** The date range MUST extend to the present day to include partial data from the current year (i.e., Year-to-Date).
-              * Example End Date (Year): CURRENT_DATE()
+              * _Example End Date (Year):_ `CURRENT_DATE()`
           * **For "Last N" questions:** The start date must be the beginning of the Nth prior period.
-              * Example Start Date ("last 6 months"): DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH)
+              * _Example Start Date ("last 6 months"):_ `DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH)`
 
-      2.  **Numeric Formatting (Crores):** All monetary values (like DISBURSALAMOUNT) MUST be reported in crores. This is a two-step process:
+      2.  **Numeric Formatting (Crores):** All monetary values (like `DISBURSALAMOUNT`) MUST be reported in crores. This is a two-step process:
           * **Step 1 (Calculation):** In a CTE or subquery, calculate the raw value in crores by dividing by 10,000,000 and rounding to 2 decimal places. Use this numeric result for ALL sorting or further calculations.
-          * **Step 2 (Display):** In the final SELECT statement ONLY, format the numeric crore value for clean display using this RegEx: REGEXP_REPLACE(FORMAT('%.2f', your_numeric_crore_value), r'(\.\d*?[1-9])0+$|\.0+$', r'\1').
-      3.  **Safe Division:** When calculating percentages, ratios, or averages, ALWAYS use SAFE_DIVIDE() to prevent "division-by-zero" errors.
-          * **Example:** SAFE_DIVIDE(SUM(CASE WHEN Net_Bounce_Flag = 1 THEN 1 ELSE 0 END), COUNT(*)) * 100
+          * **Step 2 (Display):** In the final `SELECT` statement ONLY, format the numeric crore value for clean display using this RegEx: `REGEXP_REPLACE(FORMAT('%.2f', your_numeric_crore_value), r'(\.\d*?[1-9])0+$|\.0+$', r'\1')`.
 
-      4.  **DPD_Bucket Binning Logic:** When binning by DPD_Bucket, you MUST use a CASE statement to create these exact five buckets: 0, 1, 2, 3, and 4+. Any other binning is prohibited.
+      3.  **Safe Division:** When calculating percentages, ratios, or averages, ALWAYS use `SAFE_DIVIDE()` to prevent "division-by-zero" errors.
+          * **Example:** `SAFE_DIVIDE(SUM(CASE WHEN Net_Bounce_Flag = 1 THEN 1 ELSE 0 END), COUNT(*)) * 100`
 
-      5.  **Growth Rate Definition:** If asked for "growth rate", "change", "trend", or similar terms, you MUST calculate and display the **month-over-month (MoM) percentage change**.
+      4.  **DPD_Bucket Binning Logic:** When binning by `DPD_Bucket`, you MUST use a `CASE` statement to create these exact five buckets: 0, 1, 2, 3, and 4+. Any other binning is prohibited.
 
-      6.  **Final Output Formatting:** Your final response MUST be **ONLY** the data from the query, formatted as a Markdown table. Your response **MUST** begin with the Markdown table header (e.g., | month_start | ...) and **MUST** end with the final character of the table. **ABSOLUTELY NO** other text, narrative, summary, interpretation, or explanation is permitted, especially any mention of charts.
+      5. Trend vs. Static Monthly Data: You MUST differentiate between requests for trend analysis versus static monthly figures.
+          To calculate Month-over-Month (MoM) percentage change, the user's query MUST contain explicit keywords like "growth rate", "trend", "change %", or "percentage change".
+          If these keywords are absent, you MUST return only the numbers and percentages for each specific month. DO NOT provide the MoM percentage change in this case.
 
-      7.  **Query Error Protocol:** If the generated SQL query fails to execute in BigQuery, you MUST NOT attempt to answer the user's question. Your response must be: "The query could not be completed due to the following error: [Please try again.]."   
+      6.  **Final Output Formatting:** Your final response MUST be **ONLY** the data from the query, formatted as a Markdown table. Your response **MUST** begin with the Markdown table header (e.g., `| month_start | ...`) and **MUST** end with the final character of the table. **ABSOLUTELY NO** other text, narrative, summary, interpretation, or explanation is permitted, especially any mention of charts.
+
+      7.  **Query Error Protocol:** If the generated SQL query fails to execute in BigQuery, you MUST NOT attempt to answer the user's question. Your response must be: "The query could not be completed due to the following error: `[Please try again.]`."
+
+      8.  **Filtered Percentage Logic:** When calculating a percentage where the numerator is filtered for a specific condition (like GNS cases), the denominator ("total") **MUST** also be filtered by the same underlying condition to create the correct eligible population. For "GNS Percentage", the denominator **MUST BE** the count of distinct accounts where `MOB_ON_INSTL_START_DATE = 1`.
     """
 
 
@@ -166,8 +171,12 @@ async def start_chat():
         Type your question below to get started!
         Example questions:
         - What is the growth rate in TW disbursement of Pan India in the last 6 months?
-        - What is the growth rate in TW disbursement - State wise in the last 6 months?
-        - Give the disbursement Growth rate trajectory branch wise in the last 12 months - m-o-m?
+        - What is the count and percentage of cases that have completed 12 MOB and are 90 plus ever?
+        - What is the GNS for 1st month region wise percentage and count?
+        - Which region has the highest slippage of customers from 0 dpd last year to 30+ dpd ?
+        - Could you tell me the split of high, medium and risky customers count and percentage according to the early warning score model?
+
+        💡 *Use the View SQL Mode toggle in settings to show/hide SQL queries!*
         """
     ).send()
 
@@ -207,7 +216,7 @@ async def main(message: cl.Message):
             "tableId": "TW_NOSTD_MART_REALTIME_UPDATED"
         }]
 
-        temperature = 0.1  # set to your desired value
+        temperature = 0.0  # set to your desired value
         full_query_with_context_final = f"Temperature setting: {temperature}\n\n{full_query_with_context}"
 
 
