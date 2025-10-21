@@ -7,6 +7,9 @@ import pandas_gbq
 import pandas as pd
 import chainlit as cl
 from datetime import datetime
+import plotly.express as px
+# from chainlit.element import Plot
+from chainlit import Plotly
 from google.oauth2 import service_account
 from toolbox_core import ToolboxClient
 
@@ -33,7 +36,7 @@ def auth_callback(username: str, password: str):
         and password == os.getenv("ADMIN_PASSWORD")
     ):
         # If credentials match, return a cl.User object.
-        return cl.User(identifier="admin")
+        return cl.User(identifier=username)
     else:
         # If they don't match, return None.
         return None
@@ -150,7 +153,7 @@ SYSTEM_INSTRUCTION = r"""
 
       6.  **Final Output Formatting:** Your final response MUST be **ONLY** the data from the query, formatted as a Markdown table. Your response **MUST** begin with the Markdown table header (e.g., `| month_start | ...`) and **MUST** end with the final character of the table. **ABSOLUTELY NO** other text, narrative, summary, interpretation, or explanation is permitted, especially any mention of charts.
 
-      7.  **Query Error Protocol:** If the generated SQL query fails to execute in BigQuery, you MUST NOT attempt to answer the user's question. Your response must be: "The query could not be completed due to the following error: `[Please try again.]`."
+      7.  **Query Error Protocol:** If the generated SQL query fails to execute in BigQuery, you MUST NOT attempt to answer the user's question. Your response must be: "The query could not be completed due to the following error: {Error message}  Please try again."
 
       8.  **Filtered Percentage Logic:** When calculating a percentage where the numerator is filtered for a specific condition (like GNS cases), the denominator ("total") **MUST** also be filtered by the same underlying condition to create the correct eligible population. For "GNS Percentage", the denominator **MUST BE** the count of distinct accounts where `MOB_ON_INSTL_START_DATE = 1`.
     """
