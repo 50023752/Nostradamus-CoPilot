@@ -165,3 +165,11 @@ cython_debug/
 *.pyc
 *.pyo
 *.pyd
+
+#chainlit files
+/.chainlit
+
+# local development files
+check.ipynb
+app_new.py
+create_data.py
