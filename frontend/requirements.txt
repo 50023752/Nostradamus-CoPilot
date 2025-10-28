@@ -7,3 +7,5 @@ pandas
 pandas_gbq
 plotly
 matplotlib
+streamlit
+nest_asyncio

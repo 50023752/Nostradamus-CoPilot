@@ -42,86 +42,13 @@ def parse_tool_response(response_text: str) -> dict:
     result = {"SQL Generated": "", "Answer": ""}
     for item in parsed_objects:
         if "SQL Generated" in item:
+            print(f'SQL = {item["SQL Generated"]}')
             result["SQL Generated"] = item["SQL Generated"]
         elif "Answer" in item:
+            print(f'Answer = {item["Answer"]}')
             result["Answer"] = item["Answer"]
 
     return result
-
-
-def to_bq(df: pd.DataFrame, project_id: str, dataset_id: str, table_id: str, if_exists: str = 'append'):
-    """Writes a DataFrame to a BigQuery table."""
-    table_full_id = f"{project_id}.{dataset_id}.{table_id}"
-    try:
-        pandas_gbq.to_gbq(df, destination_table=table_full_id, project_id=project_id, if_exists=if_exists)
-        logger.info(f"Data written to {table_full_id} successfully with shape {df.shape}.")
-    except Exception as e:
-        logger.error(f"Failed to write to BigQuery table {table_full_id}: {e}")
-        raise
-
-
-
-def log_to_bq(user_query: str, answer: str, status: str = "success", user_feedback: str = None, error_message: str = None, interaction_id: str = None):
-    """
-    Constructs a log entry and writes it to BigQuery.
-    If user_feedback is provided and interaction_id is present, it attempts to update an existing row.
-    Otherwise, it inserts a new row.
-    """
-    try:
-        user = cl.user_session.get("user")
-        user_id = user.identifier if user else "anonymous"
-        table_full_id = f"{config.PROJECT_ID}.{config.DATASET_ID_DUMP}.{config.TABLE_ID_DUMP}"
-        bq_client = bigquery.Client(project=config.PROJECT_ID)
-
-        df = pd.DataFrame([{
-            "user": user_id,
-            "time": datetime.utcnow(),
-            "user_query": user_query,
-            "model_answer": answer,
-            "status": status,
-            "error_message": error_message,
-            "user_feedback": user_feedback,
-        }])
-
-        if user_feedback is not None and interaction_id is not None:
-            # Attempt to update an existing row for feedback
-            update_query = f"""
-            UPDATE `{table_full_id}`
-            SET user_feedback = @user_feedback
-            WHERE interaction_id = @interaction_id
-            """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("user_feedback", "STRING", user_feedback),
-                    bigquery.ScalarQueryParameter("interaction_id", "STRING", interaction_id),
-                ]
-            )
-            query_job = bq_client.query(update_query, job_config=job_config)
-            query_job.result() # Wait for the job to complete
-            logger.info(f"Feedback updated for interaction_id {interaction_id} in {table_full_id}.")
-        else:
-            # Insert a new row for initial log or error
-            user = cl.user_session.get("user")
-            user_id = user.identifier if user else "anonymous"
-            
-            data = {
-                "user": user_id,
-                "time": datetime.utcnow(),
-                "user_query": user_query,
-                "model_answer": answer,
-                "status": status,
-                "error_message": error_message,
-                "user_feedback": user_feedback, # This will be None for initial logs
-            }
-            if interaction_id: # Add interaction_id to the data if provided
-                data["interaction_id"] = interaction_id
-
-            df = pd.DataFrame([data])
-
-            to_bq(df, project_id=config.PROJECT_ID, dataset_id=config.DATASET_ID_DUMP, table_id=config.TABLE_ID_DUMP)
-    except Exception as e:
-        logger.error(f"Failed to log to BigQuery: {e}")
-
 
 def markdown_table_to_df(markdown_text: str) -> pd.DataFrame:
     """Converts a Markdown table string to a pandas DataFrame."""
@@ -139,3 +66,40 @@ def markdown_table_to_df(markdown_text: str) -> pd.DataFrame:
 
     df = pd.DataFrame(data_rows, columns=headers)
     return df
+
+import re
+
+def clean_table_alignment_row(table_text: str) -> str:
+    """Removes alignment row (|:---|---:|:-:|) from markdown table."""
+    lines = table_text.strip().splitlines()
+    if len(lines) > 1 and re.match(r"^\|[:\-| ]+\|$", lines[1].strip()):
+        del lines[1]
+    return "\n".join(lines)
+
+    
+def fix_incomplete_markdown_table(table_text: str) -> str:
+    """
+    Detects and fixes tables missing headers or alignment rows.
+    Ensures the table starts with a header and has consistent columns.
+    """
+    lines = [l.strip() for l in table_text.strip().splitlines() if l.strip()]
+    
+    # Ignore if no '|' present
+    if not any('|' in l for l in lines):
+        return table_text
+
+    # If first line doesn’t look like a header (e.g. starts with '| | 2025...')
+    # we’ll generate placeholder headers
+    first_line = lines[0]
+    cols = [c.strip() for c in first_line.split('|') if c.strip()]
+    
+    if not re.match(r'^[A-Za-z]', cols[0]):  # header missing
+        num_cols = len(cols)
+        headers = [f"Col_{i+1}" for i in range(num_cols)]
+        header_row = "| " + " | ".join(headers) + " |"
+        align_row = "| " + " | ".join(["---"] * num_cols) + " |"
+        lines.insert(0, align_row)
+        lines.insert(0, header_row)
+    
+    # Ensure at least header + alignment + data rows
+    return "\n".join(lines)

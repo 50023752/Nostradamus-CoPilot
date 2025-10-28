@@ -173,3 +173,6 @@ cython_debug/
 check.ipynb
 app_new.py
 create_data.py
+
+#Log txt files
+*.txt

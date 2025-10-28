@@ -3,13 +3,90 @@ import json
 import io
 import pandas as pd
 import chainlit as cl
+import pandas_gbq
 from toolbox_core import ToolboxClient # type: ignore
 from logger import logger
 import config
 from utils import *
+from datetime import datetime
+from google.cloud import bigquery
 
 # --- Load System Prompt on startup ---
 SYSTEM_INSTRUCTION = load_system_prompt(config.SYSTEM_PROMPT_FILE)
+
+def to_bq(df: pd.DataFrame, project_id: str, dataset_id: str, table_id: str, if_exists: str = 'append'):
+    """Writes a DataFrame to a BigQuery table."""
+    table_full_id = f"{project_id}.{dataset_id}.{table_id}"
+    try:
+        pandas_gbq.to_gbq(df, destination_table=table_full_id, project_id=project_id, if_exists=if_exists)
+        logger.info(f"Data written to {table_full_id} successfully with shape {df.shape}.")
+    except Exception as e:
+        logger.error(f"Failed to write to BigQuery table {table_full_id}: {e}")
+        raise
+
+
+
+def log_to_bq(user_query: str, answer: str, status: str = "success", user_feedback: str = None, error_message: str = None, interaction_id: str = None):
+    """
+    Constructs a log entry and writes it to BigQuery.
+    If user_feedback is provided and interaction_id is present, it attempts to update an existing row.
+    Otherwise, it inserts a new row.
+    """
+    try:
+        user = cl.user_session.get("user")
+        user_id = user.identifier if user else "anonymous"
+        table_full_id = f"{config.PROJECT_ID}.{config.DATASET_ID_DUMP}.{config.TABLE_ID_DUMP}"
+        bq_client = bigquery.Client(project=config.PROJECT_ID)
+
+        df = pd.DataFrame([{
+            "user": user_id,
+            "time": datetime.utcnow(),
+            "user_query": user_query,
+            "model_answer": answer,
+            "status": status,
+            "error_message": error_message,
+            "user_feedback": user_feedback,
+        }])
+
+        if user_feedback is not None and interaction_id is not None:
+            # Attempt to update an existing row for feedback
+            update_query = f"""
+            UPDATE `{table_full_id}`
+            SET user_feedback = @user_feedback
+            WHERE interaction_id = @interaction_id
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("user_feedback", "STRING", user_feedback),
+                    bigquery.ScalarQueryParameter("interaction_id", "STRING", interaction_id),
+                ]
+            )
+            query_job = bq_client.query(update_query, job_config=job_config)
+            query_job.result() # Wait for the job to complete
+            logger.info(f"Feedback updated for interaction_id {interaction_id} in {table_full_id}.")
+        else:
+            # Insert a new row for initial log or error
+            user = cl.user_session.get("user")
+            user_id = user.identifier if user else "anonymous"
+            
+            data = {
+                "user": user_id,
+                "time": datetime.utcnow(),
+                "user_query": user_query,
+                "model_answer": answer,
+                "status": status,
+                "error_message": error_message,
+                "user_feedback": user_feedback, # This will be None for initial logs
+            }
+            if interaction_id: # Add interaction_id to the data if provided
+                data["interaction_id"] = interaction_id
+
+            df = pd.DataFrame([data])
+
+            to_bq(df, project_id=config.PROJECT_ID, dataset_id=config.DATASET_ID_DUMP, table_id=config.TABLE_ID_DUMP)
+    except Exception as e:
+        logger.error(f"Failed to log to BigQuery: {e}")
+
 
 # -------- 1. The New Authentication Callback --------
 @cl.password_auth_callback
