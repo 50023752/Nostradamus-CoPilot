@@ -176,3 +176,5 @@ create_data.py
 
 #Log txt files
 *.txt
+*/logs/*
+*.log

@@ -1,5 +1,6 @@
 from logger import logger
 import os
+import ast
 import json
 import io
 import pandas as pd
@@ -15,6 +16,7 @@ from google.cloud import bigquery
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import warnings
+import plotly.express as px
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -23,65 +25,6 @@ load_dotenv()
 
 # Allow nested event loops for Streamlit environment
 nest_asyncio.apply()
-
-# ---------------------- BigQuery helper functions ----------------------
-def to_bq(df: pd.DataFrame, project_id: str, dataset_id: str, table_id: str, if_exists: str = 'append'):
-    """Writes a DataFrame to a BigQuery table."""
-    table_full_id = f"{project_id}.{dataset_id}.{table_id}"
-    try:
-        pandas_gbq.to_gbq(df, destination_table=table_full_id, project_id=project_id, if_exists=if_exists)
-        logger.info(f"Data written to {table_full_id} successfully with shape {df.shape}.")
-    except Exception as e:
-        logger.error(f"Failed to write to BigQuery table {table_full_id}: {e}")
-        raise
-
-def log_to_bq(user_query: str, answer: str, status: str = "success", user_feedback: str = None, error_message: str = None, interaction_id: str = None):
-    """
-    Constructs a log entry and writes it to BigQuery.
-    If user_feedback is provided and interaction_id is present, it attempts to update an existing row.
-    Otherwise, it inserts a new row.
-    """
-    try:
-        # Get user id from Streamlit session (fallback to anonymous)
-        user_id = st.session_state.get("username", "anonymous")
-
-        table_full_id = f"{config.PROJECT_ID}.{config.DATASET_ID_DUMP}.{config.TABLE_ID_DUMP}"
-        bq_client = bigquery.Client(project=config.PROJECT_ID)
-
-        if user_feedback is not None and interaction_id is not None:
-            # Attempt to update an existing row for feedback
-            update_query = f"""
-            UPDATE `{table_full_id}`
-            SET user_feedback = @user_feedback
-            WHERE interaction_id = @interaction_id
-            """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("user_feedback", "STRING", user_feedback),
-                    bigquery.ScalarQueryParameter("interaction_id", "STRING", interaction_id),
-                ]
-            )
-            query_job = bq_client.query(update_query, job_config=job_config)
-            query_job.result()  # Wait for the job to complete
-            logger.info(f"Feedback updated for interaction_id {interaction_id} in {table_full_id}.")
-        else:
-            # Insert a new row for initial log or error
-            data = {
-                "user": user_id,
-                "time": datetime.now(timezone.utc),
-                "user_query": user_query,
-                "model_answer": answer,
-                "status": status,
-                "error_message": error_message,
-                "user_feedback": user_feedback,  # This will be None for initial logs
-            }
-            if interaction_id:  # Add interaction_id to the data if provided
-                data["interaction_id"] = interaction_id
-
-            df = pd.DataFrame([data])
-            to_bq(df, project_id=config.PROJECT_ID, dataset_id=config.DATASET_ID_DUMP, table_id=config.TABLE_ID_DUMP)
-    except Exception as e:
-        logger.error(f"Failed to log to BigQuery: {e}")
 
 # ---------------------- Async helpers and background loop caching ----------------------
 # Background event loop + thread to run toolbox coroutines reliably across interactions
@@ -133,7 +76,8 @@ def get_toolbox_and_toolset_for_query(toolset_name: str):
 # ---------------------- System prompt (same as Chainlit startup) ----------------------
 SYSTEM_INSTRUCTION = load_system_prompt(config.SYSTEM_PROMPT_FILE)
 
-WELCOME_MESSAGE = """***Welcome to Orion - The Nostradamus Copilot***
+#***Welcome to Orion - The Nostradamus Copilot***
+WELCOME_MESSAGE = """
 
 I'm ready to answer your questions about the Two Wheeler Data.
 Type your question below to get started! \n
@@ -162,7 +106,7 @@ def authenticate():
         if creds_str:
             try:
                 user_credentials = json.loads(creds_str)
-                print(f'USER_CREDENTIALS: {user_credentials}')
+                logger.debug(f'USER_CREDENTIALS: {user_credentials}')
                 if not isinstance(user_credentials, list):
                     st.sidebar.error("USER_CREDENTIALS must be a JSON list of {username,password} objects.")
                     return False
@@ -180,33 +124,20 @@ def authenticate():
 
     return False
 
-# def extract_final_answer(answer_text: str) -> str:
-#     """
-#     Extracts the final 'Answer' block containing markdown table and reasoning
-#     from a messy multi-JSON string returned by the model.
-#     """
-#     # Regex to find the last "Answer": " ... " pattern
-#     match = re.findall(r'"Answer"\s*:\s*"(.+?)"', answer_text, flags=re.DOTALL)
-#     if match:
-#         clean_text = match[-1]  # take the last 'Answer' field
-#         # Unescape any escaped newlines or quotes
-#         clean_text = clean_text.replace('\\"', '"').replace('\\n', '\n')
-#         return clean_text.strip()
-#     return answer_text.strip()
 
 # ---------------------- MAIN APP ----------------------
-def format_single_line_table(text: str) -> str:
-    """
-    Finds a single-line markdown table and formats it into a multi-line table.
-    Example: | a | b | | c | d | -> | a | b |\n| c | d |
-    """
-    # This regex finds multiple pipe-enclosed groups on the same line
-    return re.sub(r'(\s*\|.*?\|\s*)\|', r'\1\n|', text)
-
-
 def main():
-    st.set_page_config(page_title="Orion Copilot", page_icon="🪐", layout="wide")
+    st.set_page_config(page_title="Orion Copilot", page_icon="🪐", layout="wide", initial_sidebar_state="auto")
 
+    # Inject custom CSS to reduce top padding
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 1rem;
+            }
+        </style>
+        """, unsafe_allow_html=True)
     # --- Initialize session state containers ---
     # This needs to be at the top before any other st call that might use it
     if "history" not in st.session_state:
@@ -224,7 +155,7 @@ def main():
         else:
             st.info("Your chat history will appear here.")
 
-    st.title("The Orion - The Nostradamus Copilot")
+    st.title("Orion - The Nostradamus Copilot")
 
     # Show the welcome message exactly as in Chainlit startup
     st.markdown(WELCOME_MESSAGE)
@@ -293,14 +224,22 @@ def main():
                         st.warning("No response received from the backend.")
                         return
 
+                    # logger.debug("###################################################")
+                    # logger.debug("--- 1. RESPONSE STRING ---")
+                    # logger.debug(f"Type: {type(response_string)}")
+                    # logger.debug(f"response_string:\n{response_string}")
+                    # logger.debug("---------------------------------")
+
+
+
                     # Parse toolbox response
                     parsed_data = parse_tool_response(response_string)
-                    print("--- 2. PARSED DATA DICTIONARY ---")
-                    print(f"Type: {type(parsed_data)}")
-                    print(f"{parsed_data.keys()}")
-                    print("---------------------------------")
-                    print(f"Content:\n{parsed_data}")
-                    # print("---------------------------------")
+                    logger.debug("--- 2. PARSED DATA DICTIONARY ---")
+                    logger.debug(f"Type: {type(parsed_data)}")
+                    logger.debug(f"{parsed_data.keys()}")
+                    logger.debug("---------------------------------")
+                    logger.debug(f"Content:\n{parsed_data}")
+                    # logger.debug("---------------------------------")
 
                     # Extract the data from the parsed dictionary
                     # answer_string = parsed_data['Answer']
@@ -316,10 +255,18 @@ def main():
                     print("---------------------------------")
 
                     sql_query = parsed_data['SQL Generated']
-                    print("###################################################")
-                    print("---  sql_query ---")
-                    print(f"sql_query :\n{sql_query}")
-                    print("---------------------------------")
+                    logger.debug("###################################################")
+                    logger.debug("---  sql_query ---")
+                    logger.debug(f"sql_query :\n{sql_query}")
+                    logger.debug("---------------------------------")
+
+                    chart_name = parsed_data.get("Chart name")
+                    x_axis = parsed_data.get("x_axis")
+                    y_axes = parsed_data.get("y_axes", [])
+                    logger.debug('#################')
+                    logger.debug(f'Chart Name - {chart_name}, X_Axis - {x_axis}, Y_Axes - {y_axes}')
+                    logger.debug('#################')
+
 
                     if not answer_string:
                         st.warning("Received response but could not extract a valid answer.")
@@ -327,36 +274,21 @@ def main():
                             st.code(response_string)
                         return
 
-                    # Split answer into table/introduction, reasoning and follow_ups
-                    table_and_intro = ""
-                    reasoning = ""
-                    follow_ups = ""
-
-                    if "Reasoning:" in answer_string:
-                        parts = answer_string.split("Reasoning:", 1)
-                        table_and_intro = parts[0]
-                        remaining_text = "Reasoning:\n" + parts[1]
-                        if "Follow-up Questions:" in remaining_text:
-                            reasoning_parts = remaining_text.split("Follow-up Questions:", 1)
-                            reasoning = reasoning_parts[0]
-                            follow_ups = reasoning_parts[1]
-                        else:
-                            reasoning = remaining_text
-                    else:
-                        table_and_intro = answer_string
-
-                    # main_content = (table_and_intro.strip() + "\n\n" + reasoning.strip()).strip()
-                    main_content = table_and_intro
-                    # print("---  main_content ---")
-                    # print(f"main_content :\n{main_content}")
-                    # print("---------------------------------")
+                    main_content = answer_string.strip()
+                    # logger.debug("---  main_content ---")
+                    # logger.debug(f"main_content :\n{main_content}")
+                    # logger.debug("---------------------------------")
 
 
                     # Log the interaction (no interaction_id)
                     interaction_id = f"{st.session_state.get('username', 'anonymous')}-{datetime.now(timezone.utc).timestamp()}"
                     st.session_state["interaction_id"] = interaction_id
+                    
+                    # Get user id from Streamlit session (fallback to anonymous)
+                    user_id = st.session_state.get("username", "anonymous")
                     try:
-                        log_to_bq(user_query=user_query, answer=main_content, interaction_id=interaction_id)
+                        log_to_bq(user_id, user_query=user_query, answer=main_content, interaction_id=interaction_id)
+                        logger.info(f'Interaction logged to BQ for {interaction_id}')
                     except Exception as e:
                         logger.warning(f"Failed to log to BQ: {e}")
 
@@ -366,6 +298,10 @@ def main():
                         st.session_state["last_answer"] = main_content
                         st.session_state["last_sql"] = sql_query or ""
                         st.session_state["last_user_query"] = user_query
+                        st.session_state["chart_name"] = chart_name
+                        st.session_state["x_axis"] = x_axis
+                        st.session_state["y_axes"] = y_axes
+                        st.session_state["df_for_chart"] = None # Reset
 
                         try:
                             df = markdown_table_to_df(answer_string)
@@ -375,6 +311,7 @@ def main():
                                 except Exception:
                                     pass
                             csv_buffer = io.StringIO()
+                            st.session_state["df_for_chart"] = df # Save df for chart
                             df.to_csv(csv_buffer, index=False)
                             st.session_state["csv_bytes"] = csv_buffer.getvalue().encode("utf-8")
                         except Exception as e:
@@ -398,59 +335,159 @@ def main():
 
         answer_text = st.session_state["last_answer"]
 
-        def extract_markdown_table(text: str):
-            """
-            Extracts the first markdown table (including alignment rows) from text.
-            Returns tuple: (before_text, table_text, after_text)
-            """
-            # Pattern handles tables like:
-            # | A | B | C |
-            # |:--|--:|:-:|
-            # | 1 | 2 | 3 |
-            pattern = r"(\|[^\n]+\|\s*\n\|[:\-| ]+\|\s*\n(?:\|[^\n]+\|\s*\n*)+)"
-            match = re.search(pattern, text)
-            if match:
-                before = text[:match.start()].strip()
-                table = match.group(1).strip()
-                after = text[match.end():].strip()
-                return before, table, after
-            return text, "", ""
-
         table_text = clean_table_alignment_row(answer_text)
         table_text = fix_incomplete_markdown_table(table_text)
         before, table_text, after = extract_markdown_table(answer_text)
 
         output_display, buttons = st.columns([5, 1])
 
-        if before:
+        logger.debug(f"before (repr): {repr(before)}")
+        logger.debug(f"type(before): {type(before)}")
+
+        if before and isinstance(before, str) and before.strip().lower() not in ["", "undefined", "none", "null", "```"]:
+            logger.debug("In before")
             output_display.markdown(before)
+        else:
+            logger.debug(f"Skipping before — invalid value: {repr(before)}")
+
         if table_text:
             try:
                 df = markdown_table_to_df(table_text)
-                output_display.dataframe(df, use_container_width=True, hide_index=True)
-            except Exception:
-                output_display.markdown(table_text)  # fallback
-        # else:
-        #     st.info("No table detected.")
+                # Format column names: capitalize, replace underscores
+                df.columns = [format_axis_title(col) for col in df.columns]
 
-        if after:
+                # styled_df = (
+                #     df.style.set_table_styles([
+                #         {"selector": "th", "props": [("font-weight", "bold"), ("text-align", "center")]}
+                #     ])
+                # )
+
+                # # ✅ Convert to HTML and render via markdown (allow HTML)
+                # html_table = styled_df.to_html()
+                # output_display.markdown(html_table, unsafe_allow_html=True)
+                output_display.dataframe(df, use_container_width=True, hide_index=True)
+
+            except Exception as e:
+                logger.warning(f"Failed to render styled dataframe, falling back to markdown. Error: {e}")
+                output_display.markdown(table_text)  # fallback
+
+        if after and isinstance(after, str) and after.strip().lower() not in ["", "undefined", "none", "null", "```"]:
             st.markdown(after)
 
         # ✅ View SQL collapsible section
-        with st.expander("🧾 View SQL Query", expanded=False):
+        with st.expander("View SQL Query", expanded=False):
             if st.session_state.get("last_sql"):
                 st.code(st.session_state["last_sql"], language="sql")
             else:
                 st.info("No SQL query available.")
+
+        # ✅ View Chart collapsible section
+        with st.expander("View Chart", expanded=False):
+            chart_name = st.session_state.get("chart_name")
+            df_for_chart = st.session_state.get("df_for_chart")
+
+            if df_for_chart is not None and not df_for_chart.empty:
+                columns = df_for_chart.columns.tolist()
+                
+                # --- Get default axes from model or fallback ---
+                model_x_axis = st.session_state.get("x_axis")
+                model_y_axes = st.session_state.get("y_axes", [])
+
+                # Determine default X-axis
+                if model_x_axis and model_x_axis in columns:
+                    default_x_index = columns.index(model_x_axis)
+                else:
+                    default_x_index = 0 # Fallback to first column
+
+                # Determine default Y-axes
+                default_y_axes = []
+                if model_y_axes:
+                    # Handle if model_y_axes is a string like '["col1", "col2"]' or "col1, col2"
+                    if isinstance(model_y_axes, str):
+                        try:
+                            # Try parsing as a list literal
+                            parsed_axes = ast.literal_eval(model_y_axes)
+                            if isinstance(parsed_axes, list):
+                                model_y_axes = parsed_axes
+                            else: # Fallback for other string formats
+                                model_y_axes = [y.strip() for y in model_y_axes.split(',')]
+                        except (ValueError, SyntaxError):
+                            model_y_axes = [y.strip() for y in model_y_axes.split(',')]
+                    
+                    default_y_axes = [col for col in model_y_axes if col in columns]
+
+                if not default_y_axes and len(columns) > 1:
+                    # Fallback to all columns except the selected X-axis
+                    x_col_name = columns[default_x_index]
+                    default_y_axes = [col for col in columns if col != x_col_name]
+
+                # --- UI for axis selection ---
+                # st.markdown("##### Customize Chart Axes")
+                col1, col2 = st.columns(2)
+                selected_x_axis = col1.selectbox("Select X-Axis:", columns, index=default_x_index)
+                
+                # Ensure Y-axis choices don't include the selected X-axis
+                y_axis_options = [col for col in columns if col != selected_x_axis]
+                
+                # Filter default_y_axes to only include valid options
+                valid_default_y = [col for col in default_y_axes if col in y_axis_options]
+                
+                selected_y_axes = col2.multiselect("Select Y-Axis (one or more):", y_axis_options, default=valid_default_y)
+
+                # --- Generate Chart ---
+                if selected_x_axis and selected_y_axes:
+                    try:
+                        plot_df = df_for_chart.copy()
+                        
+                        # Ensure all plottable y-axis columns are numeric
+                        plottable_y_axes = []
+                        for col in selected_y_axes:
+                            try:
+                                plot_df[col] = pd.to_numeric(plot_df[col])
+                                plottable_y_axes.append(col)
+                            except (ValueError, TypeError):
+                                st.warning(f"Column '{col}' contains non-numeric values and will be excluded from the chart.", icon="⚠️")
+
+                        if plottable_y_axes:
+                            # Rename columns for display
+                            rename_map = {col: format_axis_title(col) for col in plottable_y_axes}
+                            plot_df.rename(columns=rename_map, inplace=True)
+                            display_y_axes = [rename_map[col] for col in plottable_y_axes]
+
+                            fig = px.line(plot_df, x=selected_x_axis, y=display_y_axes, title=chart_name or " ", markers=True)
+                            fig.update_layout(
+                                template="plotly_white",
+                                xaxis=dict(
+                                    title=dict(
+                                        text=format_axis_title(selected_x_axis),
+                                        font=dict(color='black')
+                                    ),
+                                    tickfont=dict(color='black')
+                                ),
+                                yaxis=dict(
+                                    title=dict(text="Value", font=dict(color='black')),
+                                    tickfont=dict(color='black')),
+                                legend_title_text='Metrics',
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                hovermode="x unified"
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.warning("No plottable numeric Y-axis columns selected.", icon="⚠️")
+
+                    except Exception as e:
+                        logger.error(f"Failed to generate chart: {e}")
+                        st.warning(f"Could not generate the chart. Please check the error: {e}", icon="⚠️")
+                else:
+                    st.info("Please select at least one Y-axis column to generate a chart.")
+            else:
+                st.info("No data available to generate a chart.")
 
         # ✅ Download CSV — no rerun wipe
         csv_bytes = st.session_state.get("csv_bytes")
 
         if csv_bytes:
             with buttons:
-                st.write("")
-                st.write("")
-                st.write("")
                 st.write("")
                 st.download_button(
                 label="⬇️ Download CSV",
@@ -469,6 +506,7 @@ def main():
         if button1.button("👍Helpful", key="helpful_button"):
             try:
                 log_to_bq(
+                    user_id = st.session_state.get("username", "anonymous"),
                     user_query=st.session_state.get("last_user_query"),
                     answer=st.session_state.get("last_answer"),
                     user_feedback='positive',
@@ -479,14 +517,14 @@ def main():
                 st.error(f"Failed to submit feedback: {e}")
 
         if button2.button("👎Not Helpful", key="not_helpful_button"):
-            log_to_bq(user_query=st.session_state.get("last_user_query"), answer=st.session_state.get("last_answer"), user_feedback='negative', interaction_id=st.session_state.get("interaction_id"))
+            log_to_bq(user_id = st.session_state.get("username", "anonymous"), user_query=st.session_state.get("last_user_query"), answer=st.session_state.get("last_answer"), user_feedback='negative', interaction_id=st.session_state.get("interaction_id"))
             st.warning("Feedback noted. Thanks for helping us improve!")
 
 
 # ---------------------- ENTRY POINT ----------------------
 if __name__ == "__main__":
-    # Authentication: keep same behavior as your Chainlit password callback
-    # main()
+    with st.sidebar:
+        st.image("https://www.ltfinance.com/images/default-source/company-logo/l-t-finance-logo.png?sfvrsn=e2123fc4_1")
     if authenticate():
         main()
     else:

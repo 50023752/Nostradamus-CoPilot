@@ -1,5 +1,4 @@
 import logging
-logging.getLogger("tqdm").setLevel(logging.WARNING)
 import sys
 import os
 
@@ -38,6 +37,11 @@ def setup_logger():
 
     # Only add handlers once (Streamlit re-runs the script)
     if not logger.handlers:
+        # Suppress noisy logs from dependencies before setting up our handlers
+        logging.getLogger("tqdm").setLevel(logging.WARNING)
+        logging.getLogger("streamlit.runtime.caching.storage.WatchedPath").setLevel(logging.WARNING)
+        logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+
         # --- File handler (append mode) ---
         file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_formatter = logging.Formatter(
@@ -49,7 +53,7 @@ def setup_logger():
         # --- Console handler ---
         console_handler = logging.StreamHandler(sys.stdout)
         console_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+            "%(asctime)s - %(levelname)s - [%(filename)s:%(funcName)s:%(lineno)d] - %(message)s"
         )
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
