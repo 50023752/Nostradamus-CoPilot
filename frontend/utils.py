@@ -128,27 +128,84 @@ def parse_tool_response(response_text: str) -> dict:
             answer = item["Answer"]
             result["Answer"] = answer # Store the full answer
 
-            # Attempt to parse chart info if present
-            if "\n\n" in answer:
-                tables = answer.split("\n\n")
-                table_1 = tables[0].strip() # Query results table
-                result["Answer"] = table_1 # Overwrite with just the main table if split is successful
+            # # Attempt to parse chart info if present
+            # if "\n\n" in answer:
+            #     tables = answer.split("\n\n")
+            #     table_1 = tables[0].strip() # Query results table
+            #     result["Answer"] = table_1 # Overwrite with just the main table if split is successful
 
-                if len(tables) > 1:
-                    table_2 = tables[1].strip() # Chart info table
+            #     if len(tables) > 1:
+            #         table_2 = tables[1].strip() # Chart info table
+            #         try:
+            #             # Extract chart values from the second markdown table
+            #             chart_lines = table_2.splitlines()
+            #             if len(chart_lines) > 2:
+            #                 # The third line contains the values
+            #                 values_line = chart_lines[2]
+            #                 values = [v.strip() for v in values_line.split('|')[1:-1]]
+            #                 # Clean the values to remove any markdown artifacts
+            #                 result['Chart name'] = values[0].strip(':').strip('-').strip()
+            #                 result['x_axis'] = values[1].strip(':').strip('-').strip()
+            #                 result['y_axes'] = values[2].strip(':').strip('-').strip()
+            #         except (IndexError, ValueError) as e:
+            #             logger.warning(f"Could not parse chart info from response: {e}")
+
+            # Split into parts if '\n\n' present
+            if "\n\n" in answer:
+                tables = [t.strip() for t in answer.split("\n\n") if t.strip()]
+                num_tables = len(tables)
+                logger.debug(f"Detected {num_tables} markdown sections in Answer.")
+
+                # Case 1️⃣: Only one section
+                if num_tables == 1:
+                    table_1 = tables[0]
+                    result["Answer"] = table_1
+                    logger.debug("Single table detected → stored as Answer only.")
+
+                # Case 2️⃣: Two sections → first = Answer, second = chart info
+                elif num_tables == 2:
+                    table_1, table_2 = tables
+                    result["Answer"] = table_1
+                    logger.debug("Two tables detected → first = Answer, second = chart info.")
+                    
                     try:
-                        # Extract chart values from the second markdown table
                         chart_lines = table_2.splitlines()
                         if len(chart_lines) > 2:
-                            # The third line contains the values
                             values_line = chart_lines[2]
                             values = [v.strip() for v in values_line.split('|')[1:-1]]
-                            # Clean the values to remove any markdown artifacts
                             result['Chart name'] = values[0].strip(':').strip('-').strip()
                             result['x_axis'] = values[1].strip(':').strip('-').strip()
                             result['y_axes'] = values[2].strip(':').strip('-').strip()
-                    except (IndexError, ValueError) as e:
+                            logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
+                        else:
+                            logger.warning("Chart info table found but not enough lines to parse.")
+                    except Exception as e:
                         logger.warning(f"Could not parse chart info from response: {e}")
+
+                # Case 3️⃣: More than 2 sections → all except last = answer, last = chart info
+                elif num_tables > 2:
+                    table_1 = "\n\n".join(tables[:-1])
+                    table_2 = tables[-1]
+                    result["Answer"] = table_1
+                    logger.debug(f"Multiple ({num_tables}) tables detected → merged all except last as Answer, parsing last for chart info.")
+                    
+                    try:
+                        chart_lines = table_2.splitlines()
+                        if len(chart_lines) > 2:
+                            values_line = chart_lines[2]
+                            values = [v.strip() for v in values_line.split('|')[1:-1]]
+                            result['Chart name'] = values[0].strip(':').strip('-').strip()
+                            result['x_axis'] = values[1].strip(':').strip('-').strip()
+                            result['y_axes'] = values[2].strip(':').strip('-').strip()
+                            logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
+                        else:
+                            logger.warning("Chart info table found but not enough lines to parse.")
+                    except Exception as e:
+                        logger.warning(f"Could not parse chart info from response: {e}")
+
+            else:
+                logger.debug("No '\\n\\n' found in Answer — stored as plain text.")
+
 
     return result
 

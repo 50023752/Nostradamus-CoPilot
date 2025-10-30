@@ -76,18 +76,6 @@ def get_toolbox_and_toolset_for_query(toolset_name: str):
 # ---------------------- System prompt (same as Chainlit startup) ----------------------
 SYSTEM_INSTRUCTION = load_system_prompt(config.SYSTEM_PROMPT_FILE)
 
-#***Welcome to Orion - The Nostradamus Copilot***
-WELCOME_MESSAGE = """
-
-I'm ready to answer your questions about the Two Wheeler Data.
-Type your question below to get started! \n
-Example questions:
-- What is the growth rate in TW disbursement of Pan India in the last 6 months?
-- What is the GNS for 1st month region wise percentage and count?
-- Which region has the highest slippage of customers from 0 dpd last year to 30+ dpd ?
-- Could you tell me the split of high, medium and risky customers count and percentage according to the early warning score model?
-"""
-
 # ---------------------- AUTHENTICATION ----------------------
 def authenticate():
     st.sidebar.title("🔐 Login")
@@ -157,9 +145,6 @@ def main():
 
     st.title("Orion - The Nostradamus Copilot")
 
-    # Show the welcome message exactly as in Chainlit startup
-    st.markdown(WELCOME_MESSAGE)
-
     if "last_answer" not in st.session_state:
         st.session_state["last_answer"] = ""
     if "csv_bytes" not in st.session_state:
@@ -168,23 +153,60 @@ def main():
     st.session_state.setdefault("client", None)
     st.session_state.setdefault("toolset", None)
     
+    st.markdown("""I'm ready to answer your questions about the Two Wheeler Data. First, select a data source, then type your question below to get started!""")
+
     # --- Data source selection ---
-    col1_radio, col2_radio = st.columns([1, 4])
-    with col1_radio:
-        st.markdown("<div style='margin-top: 5px; font-weight: 600;'>Select which data to query:</div>", unsafe_allow_html=True)
-    with col2_radio:
-        data_choice = st.radio(
-            label="Select which data to query:",
-            options=["Historic", "Real-time"],
-            horizontal=True,
-            key="data_choice",
-            label_visibility="collapsed"
+    # st.markdown("---")
+    st.markdown("##### Select a Data Source : ")
+
+    # Define the new, more descriptive options
+    option_historic = "Historical Performance Trends"
+    option_realtime = "Current Performance & Disbursals"
+
+    data_choice = st.radio(
+        "Select which data to query:",
+        options=[option_historic, option_realtime],
+        key="data_choice",
+        label_visibility="collapsed"
+    )
+
+    # Display detailed explanations for each choice
+    if data_choice == option_historic:
+        st.markdown(
+            """
+                <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
+                <b>What it's for:</b> Analyzing portfolio performance and health (GNS, NNS, DPD, etc.) over time.<br>
+                <b>Timeframe:</b> Covers all completed months, from April 2024 to the end of last month.<br>
+                <b>Example Questions:</b><br>
+                • Show me the GNS trend for the last 6 months.<br>
+                • Compare Q1 vs. Q2 portfolio health.<br>
+                • What was the total collection in May 2025?
+            </div>
+            """,
+            unsafe_allow_html=True
         )
+
+    elif data_choice == option_realtime:
+        st.markdown(
+            """
+                <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
+                <b>What it's for:</b> Getting the most recent, up-to-date snapshot of portfolio performance.<br>
+                <b>Timeframe:</b> Provides the latest available data (yesterday's performance).<br>
+                <b>Example Questions:</b><br>
+                • What is the month-to-date disbursal amount?<br>
+                • Show me yesterday's paid vs. unpaid accounts.<br>
+                • What is the current MTD disbursal for the North region?
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 
     # Input area
     col1, col2 = st.columns([5, 1])
     with col1:
-        user_query = st.text_area("**Ask your question:**", value="", height=68, key="user_query")
+        st.markdown("##### Ask your question : ")
+        user_query = st.text_area("**Ask your question:**", value="", height=68, key="user_query",label_visibility  = "collapsed")
     with col2:
         # Add empty lines to push the button down, aligning it with the text area input field
         st.text("")
@@ -217,13 +239,13 @@ def main():
 
                     ask_data_insights_tool = toolset_list[0]
 
-                    if data_choice == 'Real-time': 
+                    if data_choice == option_realtime:
                         tables_to_use = [{
                             "projectId": config.PROJECT_ID,
                             "datasetId": config.DATASET_ID_RT,
                             "tableId": config.TABLE_ID_RT
                         }]
-                    elif data_choice == 'Historic':
+                    elif data_choice == option_historic:
                         tables_to_use = [{
                             "projectId": config.PROJECT_ID,
                             "datasetId": config.DATASET_ID_HIST,
@@ -545,7 +567,8 @@ def main():
 if __name__ == "__main__":
     with st.sidebar:
         st.image("https://www.ltfinance.com/images/default-source/company-logo/l-t-finance-logo.png?sfvrsn=e2123fc4_1")
-    if authenticate():
-        main()
-    else:
-        st.stop()
+    main()
+    # if authenticate():
+    #     main()
+    # else:
+    #     st.stop()
