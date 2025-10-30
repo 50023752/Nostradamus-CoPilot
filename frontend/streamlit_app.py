@@ -167,6 +167,19 @@ def main():
     # Keep client/toolset None in session (we create/cache inside background loop)
     st.session_state.setdefault("client", None)
     st.session_state.setdefault("toolset", None)
+    
+    # --- Data source selection ---
+    col1_radio, col2_radio = st.columns([1, 4])
+    with col1_radio:
+        st.markdown("<div style='margin-top: 5px; font-weight: 600;'>Select which data to query:</div>", unsafe_allow_html=True)
+    with col2_radio:
+        data_choice = st.radio(
+            label="Select which data to query:",
+            options=["Historic", "Real-time"],
+            horizontal=True,
+            key="data_choice",
+            label_visibility="collapsed"
+        )
 
     # Input area
     col1, col2 = st.columns([5, 1])
@@ -204,12 +217,19 @@ def main():
 
                     ask_data_insights_tool = toolset_list[0]
 
-                    tables_to_use = [{
-                        "projectId": config.PROJECT_ID,
-                        "datasetId": config.DATASET_ID_1,
-                        "tableId": config.TABLE_ID_1
-                    }]
-
+                    if data_choice == 'Real-time': 
+                        tables_to_use = [{
+                            "projectId": config.PROJECT_ID,
+                            "datasetId": config.DATASET_ID_RT,
+                            "tableId": config.TABLE_ID_RT
+                        }]
+                    elif data_choice == 'Historic':
+                        tables_to_use = [{
+                            "projectId": config.PROJECT_ID,
+                            "datasetId": config.DATASET_ID_HIST,
+                            "tableId": config.TABLE_ID_HIST
+                        }]                   
+                    
                     temperature = 0.0
                     final_query = f"Temperature setting: {temperature}\n\n{full_query_with_context}"
 

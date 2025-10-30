@@ -23,6 +23,10 @@ PROJECT_ID = 'analytics-datapipeline-prod'
 DATASET_ID_DUMP = 'aiml_cj'
 TABLE_ID_DUMP = 'aiml_cj_nost_copilot_dump'
 
-# Dataset used by the model for quering
-DATASET_ID_1 = "aiml_cj_nostd_mart"
-TABLE_ID_1 = "TW_NOSTD_MART_REALTIME_UPDATED"
+# Dataset used for the realtime model
+DATASET_ID_RT = "aiml_cj_nostd_mart"
+TABLE_ID_RT = "TW_NOSTD_MART_REALTIME_UPDATED"
+
+# Dataset used for historic data
+DATASET_ID_HIST = "aiml_cj_nostd_mart"
+TABLE_ID_HIST = "TW_NOSTD_MART_HIST"
