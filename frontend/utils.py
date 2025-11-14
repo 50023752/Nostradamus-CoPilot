@@ -169,14 +169,16 @@ def parse_tool_response(response_text: str) -> dict:
                     logger.debug("Two tables detected → first = Answer, second = chart info.")
                     
                     try:
-                        chart_lines = table_2.splitlines()
-                        if len(chart_lines) > 2:
-                            values_line = chart_lines[2]
-                            values = [v.strip() for v in values_line.split('|')[1:-1]]
-                            result['Chart name'] = values[0].strip(':').strip('-').strip()
-                            result['x_axis'] = values[1].strip(':').strip('-').strip()
-                            result['y_axes'] = values[2].strip(':').strip('-').strip()
-                            logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
+                        # Only parse if it looks like a markdown table
+                        if table_2.strip().startswith("|"):
+                            chart_lines = table_2.splitlines()
+                            if len(chart_lines) > 2:
+                                values_line = chart_lines[2]
+                                values = [v.strip() for v in values_line.split('|')[1:-1]]
+                                result['Chart name'] = values[0].strip(':').strip('-').strip()
+                                result['x_axis'] = values[1].strip(':').strip('-').strip()
+                                result['y_axes'] = values[2].strip(':').strip('-').strip()
+                                logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
                         else:
                             logger.warning("Chart info table found but not enough lines to parse.")
                     except Exception as e:
@@ -190,14 +192,16 @@ def parse_tool_response(response_text: str) -> dict:
                     logger.debug(f"Multiple ({num_tables}) tables detected → merged all except last as Answer, parsing last for chart info.")
                     
                     try:
-                        chart_lines = table_2.splitlines()
-                        if len(chart_lines) > 2:
-                            values_line = chart_lines[2]
-                            values = [v.strip() for v in values_line.split('|')[1:-1]]
-                            result['Chart name'] = values[0].strip(':').strip('-').strip()
-                            result['x_axis'] = values[1].strip(':').strip('-').strip()
-                            result['y_axes'] = values[2].strip(':').strip('-').strip()
-                            logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
+                        # Only parse if it looks like a markdown table
+                        if table_2.strip().startswith("|"):
+                            chart_lines = table_2.splitlines()
+                            if len(chart_lines) > 2:
+                                values_line = chart_lines[2]
+                                values = [v.strip() for v in values_line.split('|')[1:-1]]
+                                result['Chart name'] = values[0].strip(':').strip('-').strip()
+                                result['x_axis'] = values[1].strip(':').strip('-').strip()
+                                result['y_axes'] = values[2].strip(':').strip('-').strip()
+                                logger.debug(f"Chart parsed → Name: {result['Chart name']}, X: {result['x_axis']}, Y: {result['y_axes']}")
                         else:
                             logger.warning("Chart info table found but not enough lines to parse.")
                     except Exception as e:

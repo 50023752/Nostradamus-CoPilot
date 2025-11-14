@@ -153,53 +153,53 @@ def main():
     st.session_state.setdefault("client", None)
     st.session_state.setdefault("toolset", None)
     
-    st.markdown("""I'm ready to answer your questions about the Two Wheeler Data. First, select a data source, then type your question below to get started!""")
-
+    # st.markdown("""I'm ready to answer your questions about the Two Wheeler Data. First, select a data source, then type your question below to get started!""")
+    st.markdown("The data is for illustration purposes only, and may not be the exact representation of the portfolio.")
     # --- Data source selection ---
     # st.markdown("---")
-    st.markdown("##### Select a Data Source : ")
+    # st.markdown("##### Select a Data Source : ")
 
     # Define the new, more descriptive options
     option_historic = "Historical Performance Trends"
     option_realtime = "Current Performance & Disbursals"
 
-    data_choice = st.radio(
-        "Select which data to query:",
-        options=[option_historic, option_realtime],
-        key="data_choice",
-        label_visibility="collapsed"
-    )
+    # data_choice = st.radio(
+    #     "Select which data to query:",
+    #     options=[option_historic, option_realtime],
+    #     key="data_choice",
+    #     label_visibility="collapsed"
+    # )
 
-    # Display detailed explanations for each choice
-    if data_choice == option_historic:
-        st.markdown(
-            """
-                <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
-                <b>What it's for:</b> Analyzing portfolio performance and health (GNS, NNS, DPD, etc.) over time.<br>
-                <b>Timeframe:</b> Covers all completed months, from April 2024 to the end of last month.<br>
-                <b>Example Questions:</b><br>
-                • Show me the GNS trend for the last 6 months.<br>
-                • Compare Q1 vs. Q2 portfolio health.<br>
-                • What was the total collection in May 2025?
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    # # Display detailed explanations for each choice
+    # if data_choice == option_historic:
+    #     st.markdown(
+    #         """
+    #             <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
+    #             <b>What it's for:</b> Analyzing portfolio performance and health (GNS, NNS, DPD, etc.) over time.<br>
+    #             <b>Timeframe:</b> Covers all completed months, from April 2024 to the end of last month.<br>
+    #             <b>Example Questions:</b><br>
+    #             • Show me the GNS trend for the last 6 months.<br>
+    #             • Compare Q1 vs. Q2 portfolio health.<br>
+    #             • What was the total collection in May 2025?
+    #         </div>
+    #         """,
+    #         unsafe_allow_html=True
+    #     )
 
-    elif data_choice == option_realtime:
-        st.markdown(
-            """
-                <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
-                <b>What it's for:</b> Getting the most recent, up-to-date snapshot of portfolio performance.<br>
-                <b>Timeframe:</b> Provides the latest available data (yesterday's performance).<br>
-                <b>Example Questions:</b><br>
-                • What is the month-to-date disbursal amount?<br>
-                • Show me yesterday's paid vs. unpaid accounts.<br>
-                • What is the current MTD disbursal for the North region?
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    # elif data_choice == option_realtime:
+    #     st.markdown(
+    #         """
+    #             <div style="margin-left:25px; background-color:#f0f2f6; padding:15px; border-left:5px solid #1f77b4; border-radius:8px;">
+    #             <b>What it's for:</b> Getting the most recent, up-to-date snapshot of portfolio performance.<br>
+    #             <b>Timeframe:</b> Provides the latest available data (yesterday's performance).<br>
+    #             <b>Example Questions:</b><br>
+    #             • What is the month-to-date disbursal amount?<br>
+    #             • Show me yesterday's paid vs. unpaid accounts.<br>
+    #             • What is the current MTD disbursal for the North region?
+    #         </div>
+    #         """,
+    #         unsafe_allow_html=True
+    #     )
 
 
     # Input area
@@ -207,8 +207,12 @@ def main():
     with col1:
         st.markdown("##### Ask your question : ")
         user_query = st.text_area("**Ask your question:**", value="", height=68, key="user_query",label_visibility  = "collapsed")
+        user_query = f"{user_query}\n\nIMPORTANT: In SQL, never use '=' for text filters. Always use LOWER(column) LIKE LOWER('%value%'). This is mandatory."
+
     with col2:
         # Add empty lines to push the button down, aligning it with the text area input field
+        st.text("")
+        st.text("")
         st.text("")
         st.text("")
         submit_clicked = st.button("Submit Query", key="submit_query")
@@ -239,18 +243,26 @@ def main():
 
                     ask_data_insights_tool = toolset_list[0]
 
-                    if data_choice == option_realtime:
-                        tables_to_use = [{
-                            "projectId": config.PROJECT_ID,
-                            "datasetId": config.DATASET_ID_RT,
-                            "tableId": config.TABLE_ID_RT
-                        }]
-                    elif data_choice == option_historic:
-                        tables_to_use = [{
-                            "projectId": config.PROJECT_ID,
-                            "datasetId": config.DATASET_ID_HIST,
-                            "tableId": config.TABLE_ID_HIST
-                        }]                   
+                    # if data_choice == option_realtime:
+                    #     tables_to_use = [{
+                    #         "projectId": config.PROJECT_ID,
+                    #         "datasetId": config.DATASET_ID_RT,
+                    #         "tableId": config.TABLE_ID_RT
+                    #     }]
+                    # elif data_choice == option_historic:
+                    #     tables_to_use = [{
+                    #         "projectId": config.PROJECT_ID,
+                    #         "datasetId": config.DATASET_ID_HIST,
+                    #         "tableId": config.TABLE_ID_HIST
+                    #     }]           
+                    
+                    tables_to_use = [{
+                        "projectId": config.PROJECT_ID,
+                        "datasetId": config.DATASET_ID_RT,
+                        "tableId": config.TABLE_ID_RT
+                    }]           
+                    
+                          
                     
                     temperature = 0.0
                     final_query = f"Temperature setting: {temperature}\n\n{full_query_with_context}"
@@ -258,7 +270,8 @@ def main():
                     # Execute the tool asynchronously but block until result (safe via background loop)
                     coro = ask_data_insights_tool(
                         user_query_with_context=final_query,
-                        table_references=json.dumps(tables_to_use)
+                        table_references=json.dumps(tables_to_use),
+                        history=json.dumps(history) # Pass history to the backend
                     )
                     response_string = run_async_sync(coro)
 
@@ -480,8 +493,20 @@ def main():
                 if selected_x_axis and selected_y_axes:
                     try:
                         plot_df = df_for_chart.copy()
-                        
-                        # Ensure all plottable y-axis columns are numeric
+
+                        # --- Detect and format X-axis values ---
+                        x_axis_is_date = False
+                        try:
+                            # Try parsing to datetime (if possible)
+                            plot_df[selected_x_axis] = pd.to_datetime(plot_df[selected_x_axis], errors='raise')
+                            x_axis_is_date = True
+                            # Format for display as 'Mon-YY'
+                            plot_df["_x_display"] = plot_df[selected_x_axis].dt.strftime("%b-%y")
+                        except Exception:
+                            # If not dates, keep original text values as-is
+                            plot_df["_x_display"] = plot_df[selected_x_axis].astype(str)
+
+                        # --- Ensure all plottable Y-axis columns are numeric ---
                         plottable_y_axes = []
                         for col in selected_y_axes:
                             try:
@@ -491,31 +516,53 @@ def main():
                                 st.warning(f"Column '{col}' contains non-numeric values and will be excluded from the chart.", icon="⚠️")
 
                         if plottable_y_axes:
-                            # Rename columns for display
                             rename_map = {col: format_axis_title(col) for col in plottable_y_axes}
                             plot_df.rename(columns=rename_map, inplace=True)
                             display_y_axes = [rename_map[col] for col in plottable_y_axes]
 
-                            fig = px.line(plot_df, x=selected_x_axis, y=display_y_axes, title=chart_name or " ", markers=True)
+                            # --- Build line chart ---
+                            fig = px.line(
+                                plot_df,
+                                x="_x_display",   # Use display-formatted X values
+                                y=display_y_axes,
+                                title=chart_name or " ",
+                                markers=True
+                            )
+
+                            # --- Enforce categorical X-axis with exact tick order ---
+                            fig.update_xaxes(
+                                title_text=format_axis_title(selected_x_axis),
+                                type="category",  # categorical ensures exact values shown
+                                categoryorder="array",
+                                categoryarray=plot_df["_x_display"].tolist(),
+                                tickfont_color="black",
+                                title_font_color="black"
+                            )
+
                             fig.update_layout(
                                 template="plotly_white",
-                                xaxis=dict(
-                                    title=dict(
-                                        text=format_axis_title(selected_x_axis),
-                                        font=dict(color='black')
-                                    ),
-                                    tickfont=dict(color='black')
-                                ),
                                 yaxis=dict(
                                     title=dict(text="Value", font=dict(color='black')),
-                                    tickfont=dict(color='black')),
+                                    tickfont=dict(color='black')
+                                ),
                                 legend_title_text='Metrics',
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                legend=dict(
+                                    orientation="h",
+                                    yanchor="bottom",
+                                    y=1.02,
+                                    xanchor="right",
+                                    x=1
+                                ),
                                 hovermode="x unified"
                             )
+
                             st.plotly_chart(fig, use_container_width=True)
+
                         else:
                             st.warning("No plottable numeric Y-axis columns selected.", icon="⚠️")
+
+                    except Exception as e:
+                        st.error(f"Error while creating chart: {e}")
 
                     except Exception as e:
                         logger.error(f"Failed to generate chart: {e}")
@@ -567,8 +614,8 @@ def main():
 if __name__ == "__main__":
     with st.sidebar:
         st.image("https://www.ltfinance.com/images/default-source/company-logo/l-t-finance-logo.png?sfvrsn=e2123fc4_1")
-    main()
-    # if authenticate():
-    #     main()
-    # else:
-    #     st.stop()
+    # main()
+    if authenticate():
+        main()
+    else:
+        st.stop()
