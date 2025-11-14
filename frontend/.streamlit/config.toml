@@ -1,15 +1,4 @@
-[theme]
-# Primary accent color for interactive elements.
-primaryColor = "#0057B8"
-
-# Background color for the main content area.
-backgroundColor = "#F0F2F6"
-
-# Background color of the sidebar.
-secondaryBackgroundColor = "#FFFFFF"
-
-# Color of text.
-textColor = "#262730"
-
-# Font family for all text in the app.
-font = "sans serif"
+[server]
+headless = true
+enableCORS = false
+enableWebsocketCompression = true

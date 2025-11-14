@@ -1,11 +1,16 @@
-# File: frontend/requirements.txt
-
-chainlit==2.8.0
-toolbox-core
-protobuf>=6.30.0
+fastapi
+uvicorn
+requests
+python-dotenv
 pandas
-pandas_gbq
-plotly
-matplotlib
+vertexai
+functions-framework==3.*
+google.cloud
+db-dtypes
+tabulate
+Dict
+sarvamai
+fastmcp
+google-cloud-bigquery-storage
 streamlit
-nest_asyncio
+plotly
